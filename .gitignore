@@ -1,17 +1,33 @@
-# Environment variables (contains API keys)
-.env
-.env.local
-
-# Python cache
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
 
-# Logs
-*.log
+# Environment variables
+.env
+
+# Log files
+logs/
+*.csv
+*.db
 
 # IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Miscellaneous
+*.log
+.pytest_cache/

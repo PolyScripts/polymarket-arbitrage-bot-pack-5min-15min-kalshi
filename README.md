@@ -1,383 +1,265 @@
-# Kalshi Arbitrage Bot
+# Polymarket Arbitrage Bot | Polymarket Trading Bot with 7 Strategies
 
-[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Code Style](https://img.shields.io/badge/Code%20Style-PEP%208-orange.svg)](https://www.python.org/dev/peps/pep-0008/)
+**Professional Polymarket Bot for Automated Arbitrage Trading for suitable income**
 
-A production-ready Python bot that identifies and executes arbitrage opportunities in Kalshi prediction markets. The bot analyzes market inefficiencies where contract probabilities don't sum to 100%, calculates net profit after fees, and can automatically execute trades when profitable opportunities are detected.
+> **Need help running this project or want an updated version?**  
+> 📱 **Telegram**: [@apemoonspin](https://t.me/apemoonspin)  
+---
 
-**Repository**: [polymarket-kalshi-arbitrage-trading-bot-v1](https://github.com/dexorynLabs/polymarket-kalshi-arbitrage-trading-bot-v1)
+## 📝 Description
 
-## Overview
+**Polymarket Arbitrage Bot** - The ultimate automated trading solution for Polymarket arbitrage opportunities. This **Polymarket trading bot** automatically scans markets, detects arbitrage opportunities, and executes profitable trades when Yes/No ticket prices sum to less than 1.0.
 
-This project demonstrates production-ready software engineering practices:
-
-- **API Integration**: Robust client with rate limiting, retry logic, and comprehensive error handling
-- **Financial Analysis**: Accurate fee calculations and profit modeling with real-world trading considerations
-- **Algorithm Design**: Efficient market scanning algorithms that filter and prioritize opportunities
-- **Software Engineering**: Clean architecture, type hints, modular design, and comprehensive documentation
-- **Production Readiness**: Error handling, configuration management, and safe defaults
-
-### Key Achievements
-
-- ✅ **Modular Architecture**: Clean separation of concerns with single-responsibility modules
-- ✅ **Type Safety**: Comprehensive type hints for better IDE support and maintainability
-- ✅ **Error Resilience**: Graceful handling of API failures, rate limits, and edge cases
-- ✅ **Financial Accuracy**: Precise fee calculations ensuring realistic profit estimates
-- ✅ **Production Ready**: Environment-based configuration, logging, and safe execution defaults
-
-## Features
-
-- **Dual Opportunity Detection**: Scans for both arbitrage and immediate trade opportunities
-- **Arbitrage Detection**: Identifies markets where YES + NO probabilities don't sum to 100%
-- **Immediate Trades**: Finds orderbook spreads where bid > ask (instant profit)
-- **Fee Calculation**: Accurately calculates trading fees based on contract prices
-- **Profit Analysis**: Computes net profit after fees and ranks by profitability
-- **Continuous Monitoring**: Optional continuous scanning mode
-- **Auto-Execution**: Optional automatic trade execution (use with caution)
-
-## Architecture
-
-The codebase follows a modular architecture with clear separation of concerns:
-
-### Core Modules
-
-- **`bot.py`** - Main orchestration layer that coordinates scanning and execution
-- **`kalshi_client.py`** - API abstraction layer with rate limiting, retry logic, and error handling
-- **`arbitrage_analyzer.py`** - Business logic for detecting probability-based arbitrage
-- **`trade_executor.py`** - Orderbook analysis and trade execution engine
-- **`fee_calculator.py`** - Fee calculation module with tiered fee structure support
-
-
-### Design Decisions
-
-- **Modular Design**: Each module has a single responsibility
-- **Error Handling**: Comprehensive try-catch blocks with graceful degradation
-- **Rate Limiting**: Built-in rate limiting to respect API constraints
-- **Type Safety**: Type hints throughout for better IDE support and maintainability
-- **Configuration**: Environment-based configuration for flexibility
-- **Fee Accuracy**: Precise fee calculations ensure profit estimates are realistic
-
-## Quick Start
-
-```bash
-# Clone the repository
-git clone https://github.com/dexorynLabs/polymarket-kalshi-arbitrage-trading-bot-v1.git
-cd polymarket-kalshi-arbitrage-trading-bot-v1
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Configure environment
-cp .env.example .env
-# Edit .env with your Kalshi API credentials
-
-# Run the bot
-python bot.py
-```
-
-## Setup
-
-### Prerequisites
-
-- Python 3.8+
-- Kalshi API credentials (API key and secret)
-- pip (Python package manager)
-
-### Installation
-
-1. Clone or download this repository
-
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-
-3. Create a `.env` file in the project root with your Kalshi API credentials:
-```bash
-# Copy the example file
-cp .env.example .env
-```
-
-Then edit `.env` and replace the placeholder values with your actual credentials:
-```
-# From your Kalshi account:
-# - API Key ID goes in KALSHI_API_KEY
-# - Private Key goes in KALSHI_API_SECRET
-KALSHI_API_KEY=your_api_key_id_here
-KALSHI_API_SECRET=your_private_key_here
-KALSHI_API_BASE_URL=https://api.elections.kalshi.com/trade-api/v2
-MIN_PROFIT_PER_DAY=0.1
-MAX_POSITION_SIZE=1000
-```
-
-**Note**: In your Kalshi account settings:
-- **API Key ID** → use for `KALSHI_API_KEY`
-- **Private Key** → use for `KALSHI_API_SECRET`
-
-### Optional Configuration
-
-You can adjust these parameters in `.env`:
-- `MIN_PROFIT_PER_DAY`: Minimum profit per day threshold for arbitrage opportunities (default: $0.10)
-- `MAX_POSITION_SIZE`: Maximum position size for trades (default: 1000 contracts)
-- `MIN_PROFIT_CENTS`: Minimum profit in cents per contract for immediate trades (default: 2)
-
-**Note**: The bot automatically calculates the minimum profitable deviation based on actual trading fees. Any opportunity with positive net profit (after fees) will be considered, ensuring you don't miss profitable opportunities even if they're very small.
-
-## Usage
-
-### Single Scan
-
-Run a one-time scan (automatically scans both arbitrage and immediate trades):
-```bash
-python bot.py
-```
-
-The bot will automatically:
-- Scan for immediate trade opportunities (buy low, sell high instantly)
-- Scan for arbitrage opportunities (probability mismatches)
-- Compare both types and show recommendations
-- Display the best opportunities from each category
-
-Display all opportunities (not just top 10):
-```bash
-python bot.py --all
-```
-
-Scan more markets:
-```bash
-python bot.py --limit 500
-```
-
-### Continuous Monitoring
-
-Run continuous scanning (checks every 5 minutes by default):
-```bash
-python bot.py --continuous
-```
-
-Custom scan interval (in seconds):
-```bash
-python bot.py --continuous --interval 60
-```
-
-### Automatic Trade Execution
-
-**⚠️ WARNING**: Automatically execute trades (USE WITH CAUTION):
-```bash
-python bot.py --auto-execute
-```
-
-With `--auto-execute`, the bot will:
-- Automatically execute immediate trade opportunities (instant profit)
-- Prioritize immediate trades over arbitrage (no waiting required)
-- Execute trades only when net profit is positive after fees
-
-### Legacy Options (for specific scanning)
-
-If you want to scan only one type of opportunity:
-```bash
-# Only immediate trades
-python bot.py --trades-only
-
-# Only arbitrage opportunities
-python bot.py --arbitrage-only
-```
-
-**Note**: By default, the bot scans both types automatically and compares them.
-
-### Command Line Options
-
-```
---continuous       Run continuous scanning mode
---interval N       Scan interval in seconds (default: 300)
---limit N          Maximum number of markets to scan (default: 100)
---all              Display all opportunities (not just top 10)
---auto-execute     Automatically execute profitable trades (USE WITH CAUTION)
---trades-only      Scan ONLY for immediate trade opportunities
---arbitrage-only   Scan ONLY for arbitrage opportunities
---min-liquidity N   Minimum liquidity in cents (default: 10000 = $100)
---max-scans N      Maximum number of scans in continuous mode
-```
-
-**Default Behavior**: The bot automatically scans both arbitrage and immediate trade opportunities, compares them, and shows recommendations.
-
-## How It Works
-
-The bot scans Kalshi markets for two types of profitable opportunities:
-
-### 1. Arbitrage Opportunities
-
-Arbitrage occurs when YES + NO probabilities don't sum to 100%:
-
-**Example:**
-- YES contracts trading at 52¢
-- NO contracts trading at 50¢
-- Total: 102% (2% arbitrage opportunity)
-
-**How it works:**
-1. Fetches active markets from Kalshi API
-2. Calculates total probability (YES price + NO price)
-3. Identifies markets where total ≠ 100%
-4. Calculates gross profit and net profit (after fees)
-5. Ranks by profit per day based on expiration date
-
-### 2. Immediate Trade Opportunities
-
-Immediate trades occur when bid price > ask price (can buy low, sell high instantly):
-
-**Example:**
-- Someone wants to buy YES at 43¢ (bid)
-- Someone wants to sell YES at 42¢ (ask)
-- Profit: 1¢ per contract (minus fees)
-
-**How it works:**
-1. Scans orderbooks for profitable spreads
-2. Identifies cases where bid > ask
-3. Calculates net profit after fees
-4. Optionally executes trades automatically
-
-### Comparison
-
-The bot compares both types and recommends the best option:
-- **Immediate Trades**: Instant profit, no waiting required
-- **Arbitrage**: Time-based profit, requires holding until expiration
-
-## Fee Structure
-
-The bot uses an approximation of Kalshi's fee structure:
-- Contracts priced near 50¢: ~3.5% fee
-- Contracts at extremes (near 0¢ or 100¢): ~1% fee
-- Maker orders (limit orders): 50% discount on fees
-
-**Note**: Actual fees may vary. Check Kalshi's official fee schedule for precise values.
-
-## Example Output
-
-```
-[2024-01-15 10:30:00] Scanning 100 markets for arbitrage opportunities...
-Found 87 active markets. Analyzing...
-
-============================================================
-Found 3 arbitrage opportunities!
-============================================================
-
-[1] ============================================================
-Market: Will Bitcoin reach $50,000 by end of month?
-Ticker: BTC-50K-JAN
-Total Probability: 102.5%
-Deviation from 100%: 2.50%
-Expiration: 2024-01-31 23:59:59
-Days to Expiration: 16.50
-
-Profit Analysis:
-  Gross Profit: $25.00
-  Net Profit (after fees): $22.50
-  Profit per Day: $1.36
-
-Recommended Trades:
-  1. SELL 100 contracts of BTC-50K-JAN-YES at 52¢ (side: yes)
-  2. SELL 100 contracts of BTC-50K-JAN-NO at 50¢ (side: no)
-============================================================
-```
-
-## Important Notes
-
-- **API Access**: You need valid Kalshi API credentials to use this bot
-- **Market Hours**: Kalshi operates nearly 24/7 with maintenance windows
-- **Risk**: Arbitrage opportunities may be fleeting and require quick execution
-- **Liquidity**: Ensure markets have sufficient liquidity before executing trades
-- **Testing**: Test thoroughly with small positions before scaling up
-- **Auto-Execute Warning**: The `--auto-execute` flag will automatically place trades. Use with extreme caution and test thoroughly first. Always monitor your account and positions.
-- **Order Execution**: Limit orders are used by default for safety. Market orders may execute at worse prices but provide instant execution.
-
-## Technical Details
-
-### Error Handling
-
-The bot includes comprehensive error handling:
-- **API Errors**: Graceful handling of rate limits, network errors, and API failures
-- **Data Validation**: Checks for missing or invalid market data before processing
-- **Trade Execution**: Validates opportunities before execution to prevent losses
-- **Rate Limiting**: Automatic rate limit detection and backoff strategies
-
-### Performance Considerations
-
-- **Efficient Scanning**: Filters markets by liquidity before detailed analysis
-- **Rate Limiting**: Built-in delays to respect API constraints
-- **Batch Processing**: Processes multiple markets efficiently
-- **Memory Management**: Streams data rather than loading everything into memory
-
-### Security
-
-- **Credential Management**: Uses environment variables, never hardcoded
-- **API Key Protection**: `.env` file is gitignored
-- **Safe Defaults**: Auto-execution disabled by default
-- **Input Validation**: Validates all inputs before API calls
-
-## Testing
-
-Before using with real money:
-
-1. **Dry Run**: Run without `--auto-execute` to see opportunities
-2. **Small Test**: Start with `--limit 10` and `--min-liquidity 1000`
-3. **Monitor**: Watch output and verify behavior matches expectations
-
-## Disclaimer
-
-This bot is for educational and informational purposes only. Trading involves risk, and past performance does not guarantee future results. Always:
-- Understand the risks involved
-- Test thoroughly before using real money
-- Monitor your positions
-- Comply with Kalshi's terms of service
-- Consult with financial advisors if needed
-
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Project Highlights
-
-This project showcases several important software engineering skills:
-
-### Technical Skills Demonstrated
-
-- **API Design**: Clean abstraction layer for external API integration
-- **Error Handling**: Comprehensive exception handling with graceful degradation
-- **Rate Limiting**: Intelligent rate limit detection and backoff strategies
-- **Financial Modeling**: Accurate fee calculations and profit analysis
-- **Algorithm Optimization**: Efficient filtering and prioritization algorithms
-- **Code Quality**: Type hints, docstrings, and PEP 8 compliance
-- **Configuration Management**: Environment-based configuration with validation
-- **Production Practices**: Safe defaults, logging, and comprehensive testing utilities
-
-### Code Quality Metrics
-
-- **5 Core Modules**: Clean, focused, single-responsibility design
-- **~1,674 Lines**: Well-documented, maintainable codebase
-- **Type Hints**: Throughout for better IDE support and type safety
-- **Error Handling**: Comprehensive try-catch blocks with meaningful error messages
-- **Documentation**: Extensive docstrings and README documentation
-
-### Real-World Application
-
-This bot solves a real financial problem:
-- Identifies market inefficiencies in prediction markets
-- Calculates realistic profit estimates after fees
-- Provides actionable trading recommendations
-- Can execute trades automatically (with safety defaults)
-
-## Author
-
-**DexorynLabs**
-
-- **GitHub**: [dexorynLabs](https://github.com/dexorynLabs/polymarket-kalshi-arbitrage-trading-bot-v1)
-- **Telegram**: [@dexoryn_12](https://t.me/dexoryn_12)
-
-Built with Python 3.8+, demonstrating production-ready software engineering practices.
+**Current Version Update**: This version specifically addresses and resolves the critical 3.15% profit margin calculation issue, ensuring more accurate arbitrage detection and execution.
 
 ---
 
-**Portfolio Project**: This project demonstrates proficiency in API integration, financial analysis, algorithm design, and software engineering best practices. The codebase showcases clean architecture, comprehensive error handling, and production-ready code quality.
+## ⭐ Why This Bot is "Better"  than other's.
 
+### All-in-One Solution
+Combines the best strategies from CRYINGLITTLEBABY, PolyFlashBot,  Dutch Book bots , etc into one powerful **Polymarket arbitrage trading bot**. No need to switch between multiple tools - everything you need is here.
+
+### Low Entry Barrier
+**Anyone can run it, no Python mastery needed.** Simple setup, clear documentation, and straightforward configuration. This **Polymarket trading bot** is designed for traders of all skill levels.
+
+### Adaptive Execution
+**Auto-adjusts for fees, market liquidity, and sudden volatility.** The bot intelligently adapts to market conditions, ensuring optimal execution even when conditions change rapidly.
+
+### High Speed, Low Stress
+**Trades thousands of micro-opportunities automatically.** Set it up, let it run, and watch it work. This **Polymarket arbitrage bot** handles the complexity so you don't have to.
+
+> **Ready to get started?** Contact the author via Telegram, or Twitter for setup assistance and access to advanced features.
+
+---
+
+## 🎯 Arbitrage Strategies
+
+I implemented these **7 Polymarket arbitrage trading strategies**  for premium version:
+
+1. **Strategy 1**: Liquidity Absorption Flip  
+Overview: Build a large low-cost position by soaking bot liquidity, then briefly force the reference market price at resolution to flip the outcome and cash the higher Polymarket payout.
+
+
+2. **Strategy 2**: Orderbook Parity Arbitrage (Pre-Fee Era)  - <span style="background-color: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-weight: bold;">Current repo's plan</span>  
+Overview: Exploited brief moments where YES + NO priced below $1 on short windows, buying both sides simultaneously and holding to settlement to harvest tiny, repeatable mispricings—an edge erased by the 3.15% fee.  
+Contrast — Post-Fee Adaptation: Liquidation Momentum Filter  
+Overview: After fees killed parity arbitrage, the surviving bot shifted to entering only during forced-liquidation spikes, trading explosive moves where payout asymmetry outweighed fees, proving the edge wasn’t speed but adaptive logic.
+
+3. **Strategy 3**: Structural Spread Lock  
+Overview: Trade short-duration Polymarket markets by exploiting order-book imbalances—buying both sides during panic mispricing and holding to settlement to capture the guaranteed spread minus fees, independent of market direction
+
+4. **Strategy 4**: Systematic NO Farming  
+Overview: Consistently bet NO on overhyped outcomes, exploiting the fact that most prediction markets statistically resolve to NO while the crowd overpays for unlikely “miracle” outcomes.
+
+5. **Strategy 5**:  Long-Shot Floor Buying  
+Overview: Buy YES shares at the absolute minimum price (≈0.1¢) across thousands of markets, capping downside per bet while relying on rare but inevitable long-shot resolutions to generate asymmetric upside.
+
+6. **Strategy 6**: Spread Farming  
+Overview: Use a high-frequency bot on Polymarket’s CLOB to repeatedly buy at the bid and sell at the ask, capturing tiny spreads thousands of times per day—sometimes hedged across platforms to neutralize price risk.
+
+
+7. **Strategy 7**: High-Probability Auto-Compounding  
+Overview: A fully automated bot repeatedly trades short-duration crypto up/down markets by buying high-probability contracts (≈$0.90–$0.99), capturing small spreads and incentives thousands of times a day to compound returns purely through execution and scale.
+
+> **Note**: Many advanced trading strategies are implemented in this **Polymarket arbitrage bot**. To access the full feature set and detailed strategy documentation, please contact the author via the channels above.
+
+### Strategy Images
+
+<table>
+<tr>
+<td><img src="stragegy/1.png" alt="Strategy 1" width="100%"></td>
+<td><img src="stragegy/2.png" alt="Strategy 2" width="100%"></td>
+</tr>
+<tr>
+<td><img src="stragegy/3.png" alt="Strategy 3" width="100%"></td>
+<td><img src="stragegy/4.png" alt="Strategy 4" width="100%"></td>
+</tr>
+<tr>
+<td><img src="stragegy/5.png" alt="Strategy 5" width="100%"></td>
+<td><img src="stragegy/6.png" alt="Strategy 6" width="100%"></td>
+</tr>
+<tr>
+<td colspan="2"><img src="stragegy/7.png" alt="Strategy 7" width="100%"></td>
+</tr>
+</table>
+
+---
+
+## 🎯 About This Polymarket Bot
+
+This **Polymarket arbitrage bot** is a powerful automated trading system that detects and executes arbitrage opportunities when the sum of Yes/No ticket prices on Polymarket is less than 1.0. This **Polymarket trading bot** implements multiple advanced strategies for optimal performance.
+
+Built with real-world trading in mind, this bot handles the complexities of:
+- Real-time market monitoring across hundreds of markets
+- Precise profit margin calculations (including the 3.15% fix)
+- Automated trade execution via Web3
+- Comprehensive data logging and analysis
+- Risk management and adaptive execution
+
+Whether you're a seasoned trader or just getting started, this **Polymarket arbitrage trading bot** makes automated arbitrage accessible and profitable.
+
+---
+
+## 🎯 Key Features
+
+- **Real-time Price Monitoring**: Tracks Yes/No ticket prices across multiple markets in real-time
+- **Advanced Arbitrage Detection**: Automatically detects when `yes_price + no_price < 0.99` condition is met
+- **Multiple Trading Strategies**: This Polymarket bot implements various arbitrage strategies (contact author for full access)
+- **Adaptive Execution**: Auto-adjusts for fees, market liquidity, and volatility
+- **Data Logging**: Saves price data to CSV and SQLite DB (for arbitrage opportunity analysis)
+- **Automatic Trade Execution**: Automatic order execution via Web3 (optional)
+- **3.15% Issue Resolution**: Fixed profit margin calculation for accurate arbitrage detection
+- **Low Entry Barrier**: Easy setup, no advanced Python knowledge required
+- **High-Speed Processing**: Handles thousands of micro-opportunities automatically
+
+---
+
+## 🚀 Quick Guide
+
+### Prerequisites
+
+- Python 3.8 or higher
+- Polymarket account and wallet (for actual trading with this Polymarket trading bot)
+- Polygon network RPC access
+
+### Installation
+
+1. **Clone or download the repository**
+```bash
+cd polymarket_arbitrage_bot
+```
+
+2. **Create and activate virtual environment** (recommended)
+```bash
+python3 -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+```
+
+3. **Install required packages**
+```bash
+pip install -r requirements.txt
+```
+
+4. **Set up environment variables**
+```bash
+cp .env.example .env
+# Open .env file and modify with actual values
+```
+
+### Configuration
+
+Configure your **Polymarket arbitrage trading bot** by adjusting settings in the `.env` file:
+
+- `MIN_PROFIT_MARGIN`: Minimum profit margin (default: 0.01 = 1%)
+- `SCAN_INTERVAL`: Market scan interval (seconds)
+- `MAX_MARKETS_TO_MONITOR`: Number of markets to monitor simultaneously
+- `PRIVATE_KEY`: Wallet private key (required for actual trading)
+- `ENABLE_DATA_LOGGING`: Enable/disable data logging
+
+> **Advanced configurations available**: This Polymarket bot supports many additional strategies and optimizations. Contact the author for advanced settings and custom configurations.
+
+### Usage
+
+#### Data Logging Mode (record prices only, no trading)
+```bash
+# Leave PRIVATE_KEY empty in .env to only perform data logging
+python bot.py
+```
+
+In this mode, the Polymarket trading bot:
+- Periodically queries prices of active markets
+- Saves price data to CSV and SQLite DB
+- Outputs to console when arbitrage opportunities are found (does not execute trades)
+
+#### Actual Trading Mode
+```bash
+# Set PRIVATE_KEY in .env and run
+python bot.py
+```
+
+**⚠️ Warning**: Actual trading mode uses real funds. Use only after sufficient testing.
+
+#### Monitor Specific Markets Only
+```python
+bot = PolyArbitrageBot(market_ids=["market-id-1", "market-id-2"])
+bot.run()
+```
+
+### Data Analysis
+
+```bash
+# Analyze last 24 hours of data
+python3 analyze_data.py
+
+# Analyze last 1 hour of data
+python3 analyze_data.py 1
+
+# Analysis + CSV export
+python3 analyze_data.py 24 --export
+```
+
+For detailed terminal commands, see [COMMANDS.md](COMMANDS.md).
+
+> **Need help?** Contact the author via Telegram, GitHub, or Twitter for setup assistance or updated versions of this Polymarket trading bot.
+
+---
+
+## ⚖️ Disclaimer
+
+Each arbitrage strategy requires individual fine-tuning to align with specific user requirements.
+This **Polymarket bot** is provided for educational and research purposes. The developer is not responsible for any losses that may occur when using it for actual trading. Please use only after sufficient testing and verification.
+
+**Important Notes:**
+- API Rate Limits: Polymarket API has request limits. Set `SCAN_INTERVAL` appropriately.
+- Gas Fees: Polygon network has low gas fees, but gas fees can eat into profits when targeting small profits.
+- Slippage: Slippage may occur due to price movements during actual trading with this Polymarket trading bot.
+- Concurrency: Arbitrage requires "concurrency". If you buy a Yes ticket and the No ticket price rises in the meantime, losses may occur.
+
+---
+
+## 📝 License
+
+This project is freely available for educational purposes.
+
+---
+
+## 🔍 Keywords & Tags
+
+**Polymarket Bot** | **Polymarket Trading Bot** | **Polymarket Arbitrage Bot** | **Polymarket Arbitrage Trading Bot** | Automated Trading | Prediction Markets | Arbitrage Trading | Polymarket Automation | Crypto Trading Bot | DeFi Arbitrage | Market Making | Price Arbitrage | Polymarket API | Web3 Trading | Polygon Network | Automated Arbitrage | Trading Bot | Polymarket Strategies
+
+---
+
+**Search Terms**: polymarket bot, polymarket trading bot, polymarket arbitrage bot, polymarket automation, polymarket trading strategies, automated polymarket trading, polymarket price arbitrage, polymarket bot python, polymarket arbitrage opportunities
+
+---
+
+## 👤 Author
+
+**apemoonspin**  
+📱 Telegram: [@apemoonspin](https://t.me/apemoonspin)  
+🐙 GitHub: [apemoonspin](https://github.com/apemoonspin)  
+
+---
+
+## 📚 Additional Resources
+
+- [Polymarket API Documentation](https://docs.polymarket.com)
+- [CLOB API Documentation](https://docs.polymarket.com/developers/CLOB)
+- [py-clob-client GitHub](https://github.com/Polymarket/py-clob-client)
+- [COMMANDS.md](COMMANDS.md) - Detailed terminal commands guide
+
+---
+
+## 💡 Advanced Features & Support
+
+This **Polymarket arbitrage trading bot** includes many advanced strategies and optimizations. The current public version focuses on core arbitrage detection with the 3.15% issue resolution. For access to:
+
+- Advanced trading strategies
+- Optimized configurations
+- Custom market filters
+- Enhanced profit calculations
+- Real-time WebSocket integration
+- Multi-market parallel processing
+- Risk management features
+
+**Contact the author** via Telegram, GitHub, or Twitter (see top of README).

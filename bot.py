@@ -1,480 +1,366 @@
-#!/usr/bin/env python3
 """
-Kalshi Arbitrage Bot
+Polymarket Arbitrage Bot Main Code
+Detects and executes arbitrage opportunities when Yes/No ticket price sum is less than 1.0
 
-A Python bot that finds arbitrage opportunities in Kalshi prediction markets.
-It identifies two types of opportunities:
-1. Arbitrage: Markets where probabilities don't sum to 100%
-2. Immediate Trades: Orderbook spreads where you can buy low and sell high instantly
-
-Author: DexorynLabs
-License: MIT
+Author: apemoonspin
+Telegram: @apemoonspin
+GitHub: apemoonspin
+Twitter: @apemoonspin
 """
-import os
 import time
-from typing import List, Dict
+import requests
+import asyncio
+from typing import Optional, List, Dict, Any
 from datetime import datetime
-from dotenv import load_dotenv
+from web3 import Web3
+from eth_account import Account
 
-from kalshi_client import KalshiClient
-from arbitrage_analyzer import ArbitrageAnalyzer, ArbitrageOpportunity
-from trade_executor import TradeExecutor, TradeOpportunity
+from config import (
+    GAMMA_API_URL,
+    CLOB_API_URL,
+    MIN_PROFIT_MARGIN,
+    SCAN_INTERVAL,
+    MAX_MARKETS_TO_MONITOR,
+    PRIVATE_KEY,
+    POLYGON_RPC_URL,
+    ENABLE_DATA_LOGGING,
+    CSV_LOG_FILE,
+    DB_LOG_FILE,
+    MIN_TRADE_SIZE,
+    MAX_SLIPPAGE
+)
+from data_logger import DataLogger
 
-load_dotenv()
 
-
-class KalshiArbitrageBot:
-    """
-    Main bot class for finding and analyzing arbitrage opportunities.
+class PolyArbitrageBot:
+    """Polymarket Arbitrage Bot"""
     
-    The bot scans Kalshi markets for two types of profitable opportunities:
-    - Arbitrage: When YES + NO probabilities don't sum to 100%
-    - Immediate Trades: When bid price > ask price (instant profit)
-    """
-    
-    def __init__(self, auto_execute_trades: bool = False):
+    def __init__(self, market_ids: Optional[List[str]] = None):
         """
-        Initialize the bot.
-        
         Args:
-            auto_execute_trades: If True, automatically execute profitable trades
+            market_ids: List of market IDs to monitor. If None, automatically discovers active markets
         """
-        # Initialize API client
-        self.client = KalshiClient()
+        self.market_ids = market_ids or []
+        self.min_profit_margin = MIN_PROFIT_MARGIN
+        self.scan_interval = SCAN_INTERVAL
         
-        # Initialize analyzers
-        self.arbitrage_analyzer = ArbitrageAnalyzer()
-        self.trade_executor = TradeExecutor(
-            client=self.client,
-            min_profit_cents=int(os.getenv("MIN_PROFIT_CENTS", "2")),
-            max_position_size=int(os.getenv("MAX_POSITION_SIZE", "1000")),
-            auto_execute=auto_execute_trades
-        )
+        # Initialize data logger
+        self.logger = None
+        if ENABLE_DATA_LOGGING:
+            self.logger = DataLogger(CSV_LOG_FILE, DB_LOG_FILE)
         
-        # Configuration from environment variables
-        self.min_profit_per_day = float(os.getenv("MIN_PROFIT_PER_DAY", "0.1"))
-        self.min_liquidity = int(os.getenv("MIN_LIQUIDITY", "10000"))  # $100 default
+        # Initialize Web3 (for actual trading)
+        self.web3 = None
+        self.account = None
+        if PRIVATE_KEY:
+            try:
+                self.web3 = Web3(Web3.HTTPProvider(POLYGON_RPC_URL))
+                self.account = Account.from_key(PRIVATE_KEY)
+                print(f"[✓] Wallet connected: {self.account.address}")
+            except Exception as e:
+                print(f"[!] Web3 initialization failed: {e}")
+                print("[!] Running in data logging mode only.")
     
-    def filter_markets_by_liquidity(self, markets: List[Dict]) -> List[Dict]:
-        """
-        Filter markets to only include those with sufficient liquidity.
-        
-        Only includes markets that have:
-        - Liquidity >= minimum threshold
-        - Both bid and ask prices available (tradeable)
-        
-        Args:
-            markets: List of market dictionaries from API
+    def get_active_markets(self, limit: int = MAX_MARKETS_TO_MONITOR) -> List[Dict[str, Any]]:
+        """Query active market list"""
+        try:
+            # Query active markets via Gamma API
+            params = {
+                'active': 'true',
+                'closed': 'false',
+                'limit': limit
+            }
+            response = requests.get(f"{GAMMA_API_URL}/markets", params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
             
-        Returns:
-            Filtered list of markets with sufficient liquidity
-        """
-        filtered = []
-        for market in markets:
-            # Check liquidity threshold
-            if market.get("liquidity", 0) < self.min_liquidity:
-                continue
+            # API response may be returned directly as a list
+            if isinstance(data, dict):
+                market_list = data.get('data', [])
+            else:
+                market_list = data
             
-            # Check that market has bid/ask prices (is tradeable)
-            yes_bid = market.get("yes_bid")
-            yes_ask = market.get("yes_ask")
-            no_bid = market.get("no_bid")
-            no_ask = market.get("no_ask")
+            markets = []
+            for market in market_list:
+                # Handle default values if active and closed fields are missing
+                is_active = market.get('active', True)
+                is_closed = market.get('closed', False)
+                
+                if is_active and not is_closed:
+                    markets.append({
+                        'id': str(market.get('id', '')),
+                        'question': market.get('question', ''),
+                        'slug': market.get('slug', '')
+                    })
             
-            # Market must have both bid AND ask for at least one side
-            has_yes_liquidity = yes_bid is not None and yes_ask is not None and yes_bid != yes_ask
-            has_no_liquidity = no_bid is not None and no_ask is not None and no_bid != no_ask
-            
-            if has_yes_liquidity or has_no_liquidity:
-                filtered.append(market)
+            print(f"[✓] Found {len(markets)} active markets")
+            return markets[:limit]
         
-        return filtered
-    
-    def scan_arbitrage_opportunities(self, limit: int = 100) -> List[ArbitrageOpportunity]:
-        """
-        Scan markets for arbitrage opportunities.
-        
-        Arbitrage occurs when YES + NO probabilities don't sum to 100%.
-        Example: YES at 52¢ and NO at 50¢ = 102% total (2% arbitrage)
-        
-        Args:
-            limit: Maximum number of markets to scan
-            
-        Returns:
-            List of arbitrage opportunities sorted by profit per day
-        """
-        print(f"[{datetime.now()}] Scanning {limit} markets for arbitrage opportunities...")
-        
-        # Fetch active markets
-        markets = self.client.get_markets(limit=limit, status="open")
-        if not markets:
-            print("No markets found or API error.")
+        except Exception as e:
+            print(f"[✗] Failed to query market list: {e}")
             return []
-        
-        # Filter by liquidity
-        original_count = len(markets)
-        markets = self.filter_markets_by_liquidity(markets)
-        print(f"Found {original_count} active markets. "
-              f"Filtered to {len(markets)} markets with liquidity >= ${self.min_liquidity/100:.2f}")
-        
-        if not markets:
-            return []
-        
-        # Find arbitrage opportunities
-        opportunities = self.arbitrage_analyzer.find_opportunities(markets, client=self.client)
-        
-        # Filter by minimum profit per day
-        filtered = [
-            opp for opp in opportunities 
-            if opp.profit_per_day >= self.min_profit_per_day
-        ]
-        
-        return filtered
     
-    def scan_immediate_trades(self, limit: int = 100, auto_execute: bool = False) -> List[TradeOpportunity]:
-        """
-        Scan markets for immediate trade opportunities.
+    def get_market_orderbook(self, market_id: str) -> Optional[Dict[str, Any]]:
+        """Query market orderbook data (CLOB API)"""
+        try:
+            # Query orderbook via CLOB API
+            response = requests.get(
+                f"{CLOB_API_URL}/book",
+                params={'market': market_id},
+                timeout=5
+            )
+            response.raise_for_status()
+            return response.json()
         
-        Immediate trades occur when bid price > ask price (can buy low, sell high instantly).
-        Example: Someone wants to buy YES at 43¢, someone wants to sell YES at 42¢
-        
-        Args:
-            limit: Maximum number of markets to scan
-            auto_execute: If True, automatically execute profitable trades
+        except Exception as e:
+            print(f"[✗] Failed to query orderbook ({market_id}): {e}")
+            return None
+    
+    def get_market_prices(self, market_id: str) -> Optional[Dict[str, float]]:
+        """Query Yes/No ticket prices for a market"""
+        try:
+            # Query market information via Gamma API
+            response = requests.get(
+                f"{GAMMA_API_URL}/markets/{market_id}",
+                timeout=5
+            )
+            response.raise_for_status()
+            market_data = response.json()
             
-        Returns:
-            List of trade opportunities sorted by net profit
-        """
-        print(f"[{datetime.now()}] Scanning {limit} markets for immediate trade opportunities...")
-        
-        # Fetch active markets
-        markets = self.client.get_markets(limit=limit, status="open")
-        if not markets:
-            print("No markets found or API error.")
-            return []
-        
-        # Filter by liquidity
-        original_count = len(markets)
-        markets = self.filter_markets_by_liquidity(markets)
-        print(f"Found {original_count} active markets. "
-              f"Filtered to {len(markets)} markets with liquidity >= ${self.min_liquidity/100:.2f}")
-        
-        if not markets:
-            return []
-        
-        # Temporarily update auto_execute setting
-        original_auto_execute = self.trade_executor.auto_execute
-        self.trade_executor.auto_execute = auto_execute
-        
-        # Find immediate trade opportunities
-        opportunities = self.trade_executor.scan_and_execute(markets, limit=limit)
-        
-        # Restore original setting
-        self.trade_executor.auto_execute = original_auto_execute
-        
-        # Sort by net profit (descending)
-        opportunities.sort(key=lambda x: x.net_profit, reverse=True)
-        
-        return opportunities
-    
-    def scan_all_opportunities(self, limit: int = 100, auto_execute: bool = False):
-        """
-        Scan for both arbitrage and immediate trade opportunities.
-        
-        Args:
-            limit: Maximum number of markets to scan
-            auto_execute: If True, automatically execute profitable trades
+            # Also query orderbook data
+            orderbook = self.get_market_orderbook(market_id)
             
+            # Extract Yes/No ticket prices
+            # May need adjustment based on actual API response structure
+            yes_price = None
+            no_price = None
+            yes_ask = None
+            no_ask = None
+            yes_bid = None
+            no_bid = None
+            
+            # Try extracting prices from Gamma API
+            if 'outcomePrices' in market_data and 'outcomes' in market_data:
+                import json
+                # Parse if outcomePrices and outcomes are JSON strings
+                prices_raw = market_data['outcomePrices']
+                outcomes_raw = market_data['outcomes']
+                
+                if isinstance(prices_raw, str):
+                    prices = json.loads(prices_raw)
+                else:
+                    prices = prices_raw
+                
+                if isinstance(outcomes_raw, str):
+                    outcomes = json.loads(outcomes_raw)
+                else:
+                    outcomes = outcomes_raw
+                
+                if len(prices) >= 2 and len(outcomes) >= 2:
+                    # Find Yes/No indices in outcomes list
+                    for i, outcome in enumerate(outcomes):
+                        if outcome == 'Yes' and i < len(prices):
+                            yes_price = float(prices[i])
+                        elif outcome == 'No' and i < len(prices):
+                            no_price = float(prices[i])
+            
+            # Try extracting orderbook from CLOB API
+            if orderbook:
+                # Parsing needed based on actual CLOB API response structure
+                # Example structure written here
+                pass
+            
+            # Use default values if prices are missing (error handling needed in production)
+            if yes_price is None or no_price is None:
+                # Alternative: calculate directly from market data
+                if 'tokens' in market_data:
+                    tokens = market_data['tokens']
+                    for token in tokens:
+                        if token.get('outcome') == 'Yes':
+                            yes_price = float(token.get('price', 0.5))
+                        elif token.get('outcome') == 'No':
+                            no_price = float(token.get('price', 0.5))
+            
+            if yes_price is None or no_price is None:
+                return None
+            
+            return {
+                'yes_price': yes_price,
+                'no_price': no_price,
+                'yes_ask': yes_ask or yes_price,
+                'no_ask': no_ask or no_price,
+                'yes_bid': yes_bid or yes_price,
+                'no_bid': no_bid or no_price
+            }
+        
+        except Exception as e:
+            print(f"[✗] Failed to query prices ({market_id}): {e}")
+            return None
+    
+    def check_arbitrage(self, yes_price: float, no_price: float) -> tuple[bool, float]:
+        """
+        Check for arbitrage opportunity
+        
         Returns:
-            Tuple of (arbitrage_opportunities, trade_opportunities, executed_count)
+            (opportunity_exists, expected_profit_rate)
         """
-        print(f"[{datetime.now()}] Scanning {limit} markets for all opportunities...")
-        
-        # Fetch markets once
-        markets = self.client.get_markets(limit=limit, status="open")
-        if not markets:
-            print("No markets found or API error.")
-            return [], [], 0
-        
-        # Filter by liquidity
-        original_count = len(markets)
-        markets = self.filter_markets_by_liquidity(markets)
-        print(f"Found {original_count} active markets. "
-              f"Filtered to {len(markets)} markets with liquidity >= ${self.min_liquidity/100:.2f}")
-        
-        if not markets:
-            return [], [], 0
-        
-        # Scan for arbitrage opportunities
-        arbitrage_opps = self.arbitrage_analyzer.find_opportunities(markets, client=self.client)
-        arbitrage_opps = [
-            opp for opp in arbitrage_opps 
-            if opp.profit_per_day >= self.min_profit_per_day
-        ]
-        
-        # Scan for immediate trade opportunities
-        original_auto_execute = self.trade_executor.auto_execute
-        self.trade_executor.auto_execute = False  # Don't auto-execute during scan
-        trade_opps = self.trade_executor.scan_and_execute(markets, limit=limit)
-        self.trade_executor.auto_execute = original_auto_execute
-        trade_opps.sort(key=lambda x: x.net_profit, reverse=True)
-        
-        # Execute trades if requested
-        executed_count = 0
-        if auto_execute:
-            for trade_opp in trade_opps:
-                if trade_opp.net_profit > 0:
-                    success, message = self.trade_executor.execute_trade(trade_opp)
-                    if success:
-                        print(f"[AUTO-EXECUTE] {message}")
-                        executed_count += 1
-        
-        return arbitrage_opps, trade_opps, executed_count
+        total_cost = yes_price + no_price
+        if total_cost < (1.0 - self.min_profit_margin):
+            profit = 1.0 - total_cost
+            return True, profit
+        return False, 0.0
     
-    def display_arbitrage_opportunity(self, opp: ArbitrageOpportunity, index: int = None):
-        """Display details of an arbitrage opportunity."""
-        prefix = f"[{index}] " if index is not None else ""
-        print(f"\n{prefix}{'='*60}")
-        print(f"Market: {opp.market_title}")
-        print(f"Ticker: {opp.market_ticker}")
-        print(f"Total Probability: {opp.total_probability:.2f}%")
-        print(f"Deviation from 100%: {opp.deviation:.2f}%")
-        print(f"Expiration: {opp.expiration_date.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"Days to Expiration: {opp.days_to_expiration:.2f}")
-        print(f"\nProfit Analysis:")
-        print(f"  Gross Profit: ${opp.gross_profit:.2f}")
-        print(f"  Net Profit (after fees): ${opp.net_profit:.2f}")
-        print(f"  Profit per Day: ${opp.profit_per_day:.2f}")
-        print(f"\nRecommended Trades:")
-        for i, trade in enumerate(opp.trades, 1):
-            print(f"  {i}. {trade['action'].upper()} {trade['quantity']} contracts "
-                  f"of {trade['ticker']} at {trade['price']}¢ "
-                  f"(side: {trade['side']})")
-        print(f"{'='*60}\n")
-    
-    def display_trade_opportunity(self, opp: TradeOpportunity, index: int = None):
-        """Display details of an immediate trade opportunity."""
-        prefix = f"[{index}] " if index is not None else ""
-        print(f"\n{prefix}{'='*60}")
-        print(f"Market: {opp.market_title}")
-        print(f"Ticker: {opp.market_ticker}")
-        print(f"Side: {opp.side.upper()}")
-        print(f"Buy Price: {opp.buy_price}¢")
-        print(f"Sell Price: {opp.sell_price}¢")
-        print(f"Spread: {opp.spread}¢")
-        print(f"Quantity: {opp.quantity} contracts")
-        print(f"\nProfit Analysis:")
-        print(f"  Gross Profit: ${opp.gross_profit:.2f}")
-        print(f"  Net Profit (after fees): ${opp.net_profit:.2f}")
-        print(f"  Profit per Contract: ${opp.net_profit / opp.quantity:.4f}")
-        print(f"{'='*60}\n")
-    
-    def run_scan(self, limit: int = 100, display_all: bool = False, auto_execute: bool = False):
+    def execute_trade(self, market_id: str, yes_price: float, no_price: float) -> bool:
         """
-        Run a single scan and display results.
+        Execute arbitrage trade
         
-        Scans for both arbitrage and immediate trade opportunities, then displays them.
+        For actual implementation:
+        1. Sign and send orders via CLOB API
+        2. Send transactions via Web3
+        3. Check order status and slippage
         
-        Args:
-            limit: Maximum number of markets to scan
-            display_all: If True, display all opportunities; if False, only top 10
-            auto_execute: If True, automatically execute profitable trades
+        Currently in simulation mode
         """
-        arbitrage_opps, trade_opps, executed_count = self.scan_all_opportunities(
-            limit=limit, auto_execute=auto_execute
-        )
+        if not self.account or not self.web3:
+            print("[!] Wallet not connected. Cannot execute trades.")
+            return False
         
-        if not arbitrage_opps and not trade_opps:
-            print("\nNo opportunities found that meet the criteria.")
-            if executed_count > 0:
-                print(f"Executed {executed_count} trades automatically.")
+        try:
+            # Actual implementation example:
+            # 1. Create Yes ticket buy order
+            # 2. Create No ticket buy order
+            # 3. Send both orders simultaneously (Atomic Arbitrage)
+            # 4. Check order status
+            
+            print(f"[*] Trade execution simulation:")
+            print(f"    Market ID: {market_id}")
+            print(f"    Yes ticket buy: ${yes_price:.4f}")
+            print(f"    No ticket buy: ${no_price:.4f}")
+            print(f"    Total cost: ${yes_price + no_price:.4f}")
+            print(f"    Expected profit: ${1.0 - (yes_price + no_price):.4f}")
+            
+            # Add CLOB API call code here for actual implementation
+            # from py_clob_client.client import ClobClient
+            # client = ClobClient(...)
+            # client.create_order(...)
+            
+            return True
+        
+        except Exception as e:
+            print(f"[✗] Trade execution failed: {e}")
+            return False
+    
+    def monitor_market(self, market_id: str, market_question: str = ""):
+        """Monitor single market"""
+        prices = self.get_market_prices(market_id)
+        
+        if not prices:
+            return False
+        
+        yes_price = prices['yes_price']
+        no_price = prices['no_price']
+        
+        # Data logging
+        if self.logger:
+            self.logger.log_price_data(
+                market_id=market_id,
+                market_question=market_question,
+                yes_price=yes_price,
+                no_price=no_price,
+                yes_ask=prices.get('yes_ask'),
+                no_ask=prices.get('no_ask'),
+                yes_bid=prices.get('yes_bid'),
+                no_bid=prices.get('no_bid'),
+                min_profit_margin=self.min_profit_margin
+            )
+        
+        # Check for arbitrage opportunity
+        has_opportunity, profit = self.check_arbitrage(yes_price, no_price)
+        
+        if has_opportunity:
+            print(f"\n{'='*60}")
+            print(f"[🎯] Arbitrage opportunity found!")
+            print(f"    Market: {market_question or market_id}")
+            print(f"    Yes price: ${yes_price:.4f}")
+            print(f"    No price: ${no_price:.4f}")
+            print(f"    Total cost: ${yes_price + no_price:.4f}")
+            print(f"    Expected profit: ${profit:.4f} ({profit*100:.2f}%)")
+            print(f"{'='*60}\n")
+            
+            # Execute trade
+            if self.account:
+                self.execute_trade(market_id, yes_price, no_price)
+        
+        return has_opportunity
+    
+    def run(self):
+        """Bot execution main loop"""
+        print("="*60)
+        print("Polymarket Arbitrage Bot Starting")
+        print("="*60)
+        
+        # Get market list
+        if not self.market_ids:
+            print("[*] Searching for active markets...")
+            markets = self.get_active_markets()
+            self.market_ids = [m['id'] for m in markets]
+            market_questions = {m['id']: m['question'] for m in markets}
+        else:
+            market_questions = {mid: "" for mid in self.market_ids}
+        
+        if not self.market_ids:
+            print("[✗] No markets to monitor.")
             return
         
-        # Display immediate trade opportunities first (they're instant)
-        if trade_opps:
-            print(f"\n{'='*70}")
-            print(f"IMMEDIATE TRADE OPPORTUNITIES: Found {len(trade_opps)} opportunities!")
-            print(f"{'='*70}\n")
-            
-            display_count = len(trade_opps) if display_all else min(10, len(trade_opps))
-            for i, opp in enumerate(trade_opps[:display_count], 1):
-                self.display_trade_opportunity(opp, index=i)
-            
-            if len(trade_opps) > display_count:
-                print(f"\n... and {len(trade_opps) - display_count} more immediate trade opportunities.")
+        print(f"[✓] Starting to monitor {len(self.market_ids)} markets")
+        print(f"[*] Minimum profit rate: {self.min_profit_margin*100:.1f}%")
+        print(f"[*] Scan interval: {self.scan_interval} seconds")
+        print(f"[*] Data logging: {'Enabled' if ENABLE_DATA_LOGGING else 'Disabled'}")
+        print("-"*60)
         
-        # Display arbitrage opportunities
-        if arbitrage_opps:
-            print(f"\n{'='*70}")
-            print(f"ARBITRAGE OPPORTUNITIES: Found {len(arbitrage_opps)} opportunities!")
-            print(f"{'='*70}\n")
-            
-            display_count = len(arbitrage_opps) if display_all else min(10, len(arbitrage_opps))
-            for i, opp in enumerate(arbitrage_opps[:display_count], 1):
-                self.display_arbitrage_opportunity(opp, index=i)
-            
-            if len(arbitrage_opps) > display_count:
-                print(f"\n... and {len(arbitrage_opps) - display_count} more arbitrage opportunities.")
-        
-        # Summary comparison
-        if trade_opps and arbitrage_opps:
-            print(f"\n{'='*70}")
-            print("COMPARISON:")
-            print(f"{'='*70}")
-            best_trade = trade_opps[0]
-            best_arb = arbitrage_opps[0]
-            
-            print(f"Immediate Trade: ${best_trade.net_profit:.2f} profit (instant)")
-            print(f"Arbitrage: ${best_arb.profit_per_day:.2f}/day (over {best_arb.days_to_expiration:.1f} days)")
-            
-            if best_trade.net_profit > best_arb.profit_per_day * best_arb.days_to_expiration:
-                print(f"\n→ RECOMMENDATION: Immediate trade is more profitable!")
-            elif best_arb.profit_per_day > 0:
-                print(f"\n→ RECOMMENDATION: Arbitrage opportunity may be better long-term!")
-        
-        if executed_count > 0:
-            print(f"\n[AUTO-EXECUTE] Executed {executed_count} trades automatically.")
-    
-    def run_continuous(self, scan_interval: int = 300, limit: int = 100, 
-                      auto_execute: bool = False, max_scans: int = None):
-        """
-        Run continuous scanning mode.
-        
-        Scans markets periodically and displays opportunities found.
-        
-        Args:
-            scan_interval: Seconds between scans
-            limit: Maximum number of markets to scan per iteration
-            auto_execute: If True, automatically execute profitable trades
-            max_scans: Maximum number of scans (None = infinite)
-        """
-        print(f"Starting continuous scanning (every {scan_interval} seconds)...")
-        if auto_execute:
-            print("⚠️  AUTO-EXECUTE ENABLED: Trades will be executed automatically!")
-        if max_scans:
-            print(f"Maximum scans: {max_scans}")
-        print("Press Ctrl+C to stop.\n")
-        
-        scan_count = 0
         try:
             while True:
-                scan_count += 1
-                if max_scans and scan_count > max_scans:
-                    print(f"\nReached maximum scan count ({max_scans}). Stopping.")
-                    break
+                opportunities_found = 0
                 
-                arbitrage_opps, trade_opps, executed_count = self.scan_all_opportunities(
-                    limit=limit, auto_execute=auto_execute
-                )
+                for market_id in self.market_ids:
+                    try:
+                        if self.monitor_market(market_id, market_questions.get(market_id, "")):
+                            opportunities_found += 1
+                    except KeyboardInterrupt:
+                        raise
+                    except Exception as e:
+                        print(f"[✗] Market monitoring error ({market_id}): {e}")
+                        continue
                 
-                total_opps = len(arbitrage_opps) + len(trade_opps)
+                # Output statistics (periodically)
+                if self.logger and opportunities_found == 0:
+                    # Output statistics every 10 minutes
+                    if int(time.time()) % 600 == 0:
+                        stats = self.logger.get_arbitrage_statistics(hours=24)
+                        if stats['total_opportunities'] > 0:
+                            print(f"\n[📊] Last 24 hours statistics:")
+                            print(f"    Arbitrage opportunities: {stats['total_opportunities']}")
+                            print(f"    Average profit rate: {stats['avg_profit']*100:.2f}%")
+                            print(f"    Maximum profit rate: {stats['max_profit']*100:.2f}%")
+                            print(f"    Unique markets: {stats['unique_markets']}\n")
                 
-                if total_opps > 0:
-                    print(f"\n✅ FOUND {total_opps} OPPORTUNITIES!")
-                    print(f"  - {len(trade_opps)} immediate trades")
-                    print(f"  - {len(arbitrage_opps)} arbitrage opportunities")
-                else:
-                    print(f"\nNo opportunities found (scan #{scan_count})")
-                
-                print(f"\nWaiting {scan_interval} seconds until next scan...\n")
-                time.sleep(scan_interval)
+                time.sleep(self.scan_interval)
+        
         except KeyboardInterrupt:
-            print("\n\nScanning stopped by user.")
-
-
-def main():
-    """Main entry point for the bot."""
-    import argparse
-    
-    parser = argparse.ArgumentParser(
-        description="Kalshi Arbitrage Bot - Find trading opportunities in prediction markets"
-    )
-    parser.add_argument(
-        "--continuous",
-        action="store_true",
-        help="Run continuous scanning mode"
-    )
-    parser.add_argument(
-        "--interval",
-        type=int,
-        default=300,
-        help="Scan interval in seconds (default: 300)"
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=100,
-        help="Maximum number of markets to scan (default: 100)"
-    )
-    parser.add_argument(
-        "--all",
-        action="store_true",
-        help="Display all opportunities (not just top 10)"
-    )
-    parser.add_argument(
-        "--trades-only",
-        action="store_true",
-        dest="trades_only",
-        help="Scan ONLY for immediate trade opportunities"
-    )
-    parser.add_argument(
-        "--arbitrage-only",
-        action="store_true",
-        dest="arbitrage_only",
-        help="Scan ONLY for arbitrage opportunities"
-    )
-    parser.add_argument(
-        "--auto-execute",
-        action="store_true",
-        dest="auto_execute",
-        help="Automatically execute profitable trades (USE WITH CAUTION)"
-    )
-    parser.add_argument(
-        "--min-liquidity",
-        type=int,
-        default=None,
-        help="Minimum liquidity in cents (default: 10000 = $100)"
-    )
-    parser.add_argument(
-        "--max-scans",
-        type=int,
-        default=None,
-        help="Maximum number of scans in continuous mode (default: infinite)"
-    )
-    
-    args = parser.parse_args()
-    
-    # Initialize bot
-    bot = KalshiArbitrageBot(auto_execute_trades=args.auto_execute)
-    
-    # Override min_liquidity if provided
-    if args.min_liquidity is not None:
-        bot.min_liquidity = args.min_liquidity
-    
-    # Run based on mode
-    if args.continuous:
-        bot.run_continuous(
-            scan_interval=args.interval,
-            limit=args.limit,
-            auto_execute=args.auto_execute,
-            max_scans=args.max_scans
-        )
-    elif args.trades_only:
-        opportunities = bot.scan_immediate_trades(limit=args.limit, auto_execute=args.auto_execute)
-        if opportunities:
-            display_count = len(opportunities) if args.all else min(10, len(opportunities))
-            for i, opp in enumerate(opportunities[:display_count], 1):
-                bot.display_trade_opportunity(opp, index=i)
-    elif args.arbitrage_only:
-        opportunities = bot.scan_arbitrage_opportunities(limit=args.limit)
-        if opportunities:
-            display_count = len(opportunities) if args.all else min(10, len(opportunities))
-            for i, opp in enumerate(opportunities[:display_count], 1):
-                bot.display_arbitrage_opportunity(opp, index=i)
-    else:
-        # Default: scan both types
-        bot.run_scan(limit=args.limit, display_all=args.all, auto_execute=args.auto_execute)
+            print("\n\n[*] Shutting down bot...")
+            if self.logger:
+                stats = self.logger.get_arbitrage_statistics(hours=24)
+                print(f"\n[📊] Final statistics:")
+                print(f"    Arbitrage opportunities: {stats['total_opportunities']}")
+                print(f"    Average profit rate: {stats['avg_profit']*100:.2f}%")
+            print("[✓] Bot shutdown complete")
 
 
 if __name__ == "__main__":
-    main()
+    # Usage example
+    # To monitor specific markets only:
+    # bot = PolyArbitrageBot(market_ids=["market-id-1", "market-id-2"])
+    
+    # Monitor all active markets:
+    bot = PolyArbitrageBot()
+    bot.run()
