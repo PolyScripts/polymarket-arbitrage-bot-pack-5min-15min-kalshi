@@ -2,7 +2,7 @@
 
 **English** | [中文（简体）](README.zh-CN.md)
 
-**Contact / Buy full versions / Premium support:** Telegram [@movez_x](https://t.me/movez_x)
+**Contact / Buy full versions / Premium support:** Telegram [@x_movez](https://t.me/x_movez)
 
 ![PolyScripts Polymarket Trading Bot Pack](banner.jpg)
 
@@ -17,7 +17,7 @@ This repository is a **curated pack of Polymarket trading bots and strategies** 
 - **Ultra-fast execution** (Rust low-latency tooling)
 - **Specialized trading UIs** (sports click-to-bet execution)
 
-If you want the **full source code**, advanced features, help deploying on a VPS, custom strategy work, or a premium version, message me on Telegram: **[@movez_x](https://t.me/movez_x)**.
+If you want the **full source code**, advanced features, help deploying on a VPS, custom strategy work, or a premium version, message me on Telegram: **[@x_movez](https://t.me/x_movez)**.
 
 ---
 
@@ -30,7 +30,7 @@ If you want the **full source code**, advanced features, help deploying on a VPS
 - **GitHub repo**: [`PolyScripts/polymarket-5min-15min-1hr-btc-arbitrage-trading-bot-rust`](https://github.com/PolyScripts/polymarket-5min-15min-1hr-btc-arbitrage-trading-bot-rust)
 - **Best for**: Traders who need **speed**
 - **Core idea**: Low-latency order placement for short window BTC Up/Down markets, with configurable dry-run + live modes
-- **Want 1hr / XRP / SOL / ETH bots?** Message Telegram **[@movez_x](https://t.me/movez_x)** to buy the premium builds.
+- **Want 1hr / XRP / SOL / ETH bots?** Message Telegram **[@x_movez](https://t.me/x_movez)** to buy the premium builds.
 
 Preview:
 
@@ -47,7 +47,7 @@ Preview:
 - **GitHub repo**: [`PolyScripts/polymarket-kalshi-crossplatform-arbitrage-bot`](https://github.com/PolyScripts/polymarket-kalshi-crossplatform-arbitrage-bot)
 - **Best for**: Cross-market pricing inefficiencies (15-min windows)
 - **Core idea**: Watch both venues in real time, confirm pricing edges, and execute hedged legs with thresholds + logging
-- **Upgrade request**: Want to extend features to the **1hr market**? Message **[@movez_x](https://t.me/movez_x)**.
+- **Upgrade request**: Want to extend features to the **1hr market**? Message **[@x_movez](https://t.me/x_movez)**.
 
 Preview:
 
@@ -116,7 +116,7 @@ This pack contains **working demos and strategy previews**. Many traders ask for
 - VPS deployment, monitoring, and Telegram alerts
 - Custom strategy rules and risk controls
 
-Message me on Telegram: **[@movez_x](https://t.me/movez_x)**.
+Message me on Telegram: **[@x_movez](https://t.me/x_movez)**.
 
 ---
 

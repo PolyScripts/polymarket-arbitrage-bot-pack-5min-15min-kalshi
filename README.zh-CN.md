@@ -2,7 +2,7 @@
 
 [English](README.md) | **中文（简体）**
 
-**联系 / 购买完整版 / 高级支持：** Telegram [@movez_x](https://t.me/movez_x)
+**联系 / 购买完整版 / 高级支持：** Telegram [@x_movez](https://t.me/x_movez)
 
 ![PolyScripts Polymarket Trading Bot Pack](banner.jpg)
 
@@ -17,7 +17,7 @@
 - **超低延迟执行**（Rust 工具链，适合抢速度）
 - **专用交易界面**（体育盘快速点击下单）
 
-如果你想要 **完整源码**、定制功能、部署/运维协助（VPS）、或高级版本，请私信 Telegram：**[@movez_x](https://t.me/movez_x)**。
+如果你想要 **完整源码**、定制功能、部署/运维协助（VPS）、或高级版本，请私信 Telegram：**[@x_movez](https://t.me/x_movez)**。
 
 ---
 
@@ -30,7 +30,7 @@
 - **GitHub 仓库**：[`PolyScripts/polymarket-5min-15min-1hr-btc-arbitrage-trading-bot-rust`](https://github.com/PolyScripts/polymarket-5min-15min-1hr-btc-arbitrage-trading-bot-rust)
 - **适用人群**：对 **速度** 有强需求的交易者
 - **策略概述**：为短周期 BTC Up/Down 窗口提供低延迟下单能力，支持 dry-run 与实盘模式
-- **想买 1 小时 / XRP / SOL / ETH 版本？** 直接 Telegram 联系 **[@movez_x](https://t.me/movez_x)** 获取高级版。
+- **想买 1 小时 / XRP / SOL / ETH 版本？** 直接 Telegram 联系 **[@x_movez](https://t.me/x_movez)** 获取高级版。
 
 预览：
 
@@ -44,7 +44,7 @@
 - **GitHub 仓库**：[`PolyScripts/polymarket-kalshi-crossplatform-arbitrage-bot`](https://github.com/PolyScripts/polymarket-kalshi-crossplatform-arbitrage-bot)
 - **适用人群**：做跨平台价差 / 15 分钟窗口机会的交易者
 - **策略概述**：WebSocket 实时监控两边价格，满足阈值后执行对冲腿，并落地完整日志
-- **升级需求**：想把功能扩展到 **1 小时市场**？请联系 **[@movez_x](https://t.me/movez_x)**。
+- **升级需求**：想把功能扩展到 **1 小时市场**？请联系 **[@x_movez](https://t.me/x_movez)**。
 
 预览：
 
@@ -111,7 +111,7 @@
 - VPS 部署、监控、Telegram 告警
 - 定制策略规则与风控模块
 
-请联系 Telegram：**[@movez_x](https://t.me/movez_x)**。
+请联系 Telegram：**[@x_movez](https://t.me/x_movez)**。
 
 ---
 
